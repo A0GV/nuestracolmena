@@ -1,0 +1,19 @@
+apiVersion: 1
+
+datasources:
+  - name: Nuestracolmena
+    uid: nuestracolmena-pg
+    type: grafana-postgresql-datasource
+    access: proxy
+    isDefault: true
+    editable: false
+    url: ${MYHIVE_GRAFANA_DB_HOST}
+    user: ${MYHIVE_GRAFANA_DB_USER}
+    jsonData:
+      database: ${MYHIVE_GRAFANA_DB_NAME}
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: false
+      maxOpenConns: 5
+    secureJsonData:
+      password: ${MYHIVE_GRAFANA_DB_PASSWORD}

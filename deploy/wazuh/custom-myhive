@@ -1,0 +1,5 @@
+#!/bin/sh
+# Wrapper que Wazuh ejecuta desde /var/ossec/integrations/custom-myhive.
+# Los argumentos llegan como: <alert_file> <api_key> <hook_url>
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec python3 "$DIR/custom-myhive.py" "$@"

@@ -1,0 +1,704 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String   @id @default(uuid())
+  login                String   @unique
+  name                 String
+  email                String?
+  passwordHash         String?
+  type                 String   @default("normal")
+  locked               Boolean  @default(false)
+  mfaEnabled           Boolean  @default(false)
+  mfaSecret            String?
+  defaultOrganisationId String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  defaultOrganisation Organisation?      @relation("UserDefaultOrganisation", fields: [defaultOrganisationId], references: [id])
+  memberships         OrganisationUser[]
+  apiKeys             ApiKey[]
+  casesCreated        Case[]             @relation("CaseCreatedBy")
+  casesAssigned       Case[]             @relation("CaseAssignee")
+  tasksAssigned       CaseTask[]         @relation("TaskAssignee")
+  logsCreated         TaskLog[]
+  observablesCreated  Observable[]
+  proceduresCreated   Procedure[]
+  commentsCreated     Comment[]
+  alertsCreated       Alert[]
+  alertsAssigned      Alert[]            @relation("AlertAssignee")
+  sharesCreated       Share[]
+  templatesCreated    CaseTemplate[]
+  dashboardsCreated   Dashboard[]
+  pagesCreated        Page[]
+  attachmentsCreated  Attachment[]
+  auditLogs           AuditLog[]
+  functionsCreated    Function[]
+  notificationsCreated Notification[]
+  endpointsCreated    Endpoint[]
+  feedersCreated      AlertFeeder[]
+  reportsCreated      CaseReport[]
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  keyHash    String    @unique
+  prefix     String
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model Organisation {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  taskRule    String   @default("manual")
+  observableRule String @default("manual")
+  locked      Boolean  @default(false)
+  avatarKey   String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users          OrganisationUser[]
+  defaultForUsers User[]          @relation("UserDefaultOrganisation")
+  cases          Case[]
+  alerts         Alert[]
+  observables    Observable[]
+  procedures     Procedure[]
+  comments       Comment[]
+  tags           Tag[]
+  caseStatuses   CaseStatus[]
+  alertStatuses  AlertStatus[]
+  customFields   CustomField[]
+  templates      CaseTemplate[]
+  dashboards     Dashboard[]
+  pages          Page[]
+  pageTemplates  PageTemplate[]
+  caseReports    CaseReport[]
+  caseReportTemplates CaseReportTemplate[]
+  sharesOwned    Share[]          @relation("ShareOwner")
+  sharesReceived Share[]          @relation("ShareTarget")
+  attachments    Attachment[]
+  auditLogs      AuditLog[]
+  functions      Function[]
+  slaRules       SlaRule[]
+  notifications  Notification[]
+  endpoints      Endpoint[]
+  alertFeeders   AlertFeeder[]
+  jobs           Job[]
+  linksFrom      OrganisationLink[] @relation("OrgLinkFrom")
+  linksTo        OrganisationLink[] @relation("OrgLinkTo")
+}
+
+model OrganisationLink {
+  id          String @id @default(uuid())
+  fromOrgId   String
+  toOrgId     String
+  fromOrg     Organisation @relation("OrgLinkFrom", fields: [fromOrgId], references: [id], onDelete: Cascade)
+  toOrg       Organisation @relation("OrgLinkTo", fields: [toOrgId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  @@unique([fromOrgId, toOrgId])
+}
+
+model Profile {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  type        String   @default("organisation")
+  permissions Json     @default("[]")
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  memberships OrganisationUser[]
+  shares      Share[]
+}
+
+model OrganisationUser {
+  id             String   @id @default(uuid())
+  organisationId String
+  userId         String
+  profileId      String
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile      Profile      @relation(fields: [profileId], references: [id])
+
+  @@unique([organisationId, userId])
+  @@index([userId])
+}
+
+model Share {
+  id             String   @id @default(uuid())
+  ownerOrgId     String
+  sharedWithOrgId String
+  objectType     String
+  objectId       String
+  profileId      String
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  ownerOrg  Organisation @relation("ShareOwner", fields: [ownerOrgId], references: [id], onDelete: Cascade)
+  targetOrg Organisation @relation("ShareTarget", fields: [sharedWithOrgId], references: [id], onDelete: Cascade)
+  profile   Profile      @relation(fields: [profileId], references: [id])
+  createdBy User?        @relation(fields: [createdById], references: [id])
+
+  @@unique([ownerOrgId, sharedWithOrgId, objectType, objectId])
+  @@index([objectType, objectId])
+}
+
+model CaseStatus {
+  id             String   @id @default(uuid())
+  organisationId String
+  value          String
+  stage          String
+  order          Int      @default(0)
+  colour         String   @default("#4a90e2")
+  hidden         Boolean  @default(false)
+  requiresImpact Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  cases          Case[]
+  @@unique([organisationId, value])
+}
+
+model Case {
+  id             String    @id @default(uuid())
+  organisationId String
+  number         Int
+  title          String
+  description    String    @default("")
+  summary        String?
+  severity       Int       @default(2)
+  tlp            Int       @default(2)
+  pap            Int       @default(2)
+  tags           String[]  @default([])
+  statusId       String?
+  stage          String    @default("New")
+  assigneeId     String?
+  startDate      DateTime  @default(now())
+  endDate        DateTime?
+  dueDate        DateTime?
+  flag           Boolean   @default(false)
+  accessKind     String    @default("organisation")
+  accessOrgIds   String[]  @default([])
+  customFields   Json      @default("{}")
+  mergedIntoCaseId String?
+  exports        Json      @default("[]")
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  closedAt       DateTime?
+  acknowledgedAt DateTime?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  status       CaseStatus?  @relation(fields: [statusId], references: [id])
+  assignee     User?        @relation("CaseAssignee", fields: [assigneeId], references: [id])
+  createdBy    User?        @relation("CaseCreatedBy", fields: [createdById], references: [id])
+  mergedInto   Case?        @relation("CaseMerge", fields: [mergedIntoCaseId], references: [id])
+  mergedCases  Case[]       @relation("CaseMerge")
+  tasks        CaseTask[]
+  observables  Observable[]
+  procedures   Procedure[]
+  alerts       Alert[]
+  reports      CaseReport[]
+  logs         TaskLog[]
+  pages        Page[]
+
+  @@unique([organisationId, number])
+  @@index([organisationId, stage])
+  @@index([organisationId, severity])
+  @@index([organisationId, createdAt])
+}
+
+model CaseTask {
+  id             String    @id @default(uuid())
+  organisationId String
+  caseId         String
+  title          String
+  group          String?
+  description    String    @default("")
+  status         String    @default("Waiting")
+  flag           Boolean   @default(false)
+  mandatory      Boolean   @default(false)
+  startDate      DateTime?
+  endDate        DateTime?
+  dueDate        DateTime?
+  order          Int       @default(0)
+  assigneeId     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  acknowledgedAt DateTime?
+
+  case         Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  assignee     User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  logs         TaskLog[]
+  @@index([caseId, status])
+  @@index([assigneeId, status])
+}
+
+model TaskLog {
+  id             String   @id @default(uuid())
+  organisationId String
+  taskId         String
+  caseId         String
+  message        String
+  date           DateTime @default(now())
+  includeInTimeline Boolean @default(true)
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  task        CaseTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  @@index([taskId, date])
+}
+
+model Observable {
+  id             String   @id @default(uuid())
+  organisationId String
+  caseId         String?
+  alertId        String?
+  dataType       String
+  data           String
+  dataHash       String?
+  attachmentId   String?
+  message        String?
+  tlp            Int      @default(2)
+  pap            Int      @default(2)
+  ioc            Boolean  @default(false)
+  sighted        Boolean  @default(false)
+  sightedAt      DateTime?
+  ignoreSimilarity Boolean @default(false)
+  tags           String[] @default([])
+  startDate      DateTime @default(now())
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  case         Case?        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  alert        Alert?       @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id])
+  attachment   Attachment?  @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+  reports      ObservableReport[]
+  @@index([caseId])
+  @@index([attachmentId])
+  @@index([alertId])
+  @@index([organisationId, dataType])
+  @@index([organisationId, dataHash])
+}
+
+model ObservableReport {
+  id           String   @id @default(uuid())
+  observableId String
+  analyzer     String
+  analyzerId   String?
+  connectorId  String?
+  cortexJobId  String?
+  status       String   @default("Success")
+  errorMessage String?
+  taxonomies   Json     @default("[]")
+  artifacts    Json     @default("[]")
+  report       Json     @default("{}")
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+  observable   Observable @relation(fields: [observableId], references: [id], onDelete: Cascade)
+  @@index([status])
+  @@index([observableId])
+}
+
+model Procedure {
+  id             String   @id @default(uuid())
+  organisationId String
+  caseId         String?
+  alertId        String?
+  patternId      String
+  patternName    String?
+  tactic         String?
+  occurDate      DateTime @default(now())
+  description    String   @default("")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  case         Case?        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  alert        Alert?       @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id])
+  @@index([caseId])
+  @@index([alertId])
+}
+
+model Pattern {
+  id              String   @id @default(uuid())
+  patternId       String   @unique
+  name            String
+  description     String?
+  tactics         String[] @default([])
+  platforms       String[] @default([])
+  catalog         String   @default("MITRE ATT&CK")
+  isCustom        Boolean  @default(false)
+  url             String?
+  isSubtechnique  Boolean  @default(false)
+  parentPatternId String?
+  version         String?
+  revoked         Boolean  @default(false)
+  dataSources     String[] @default([])
+  detection       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+}
+
+model Tactic {
+  id          String   @id @default(uuid())
+  tacticId    String   @unique
+  name        String
+  shortName   String   @unique
+  description String?
+  order       Int
+  createdAt   DateTime @default(now())
+}
+
+model Comment {
+  id             String   @id @default(uuid())
+  organisationId String
+  objectType     String
+  objectId       String
+  message        String
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy      User?        @relation(fields: [createdById], references: [id])
+  @@index([objectType, objectId])
+}
+
+model AlertStatus {
+  id             String   @id @default(uuid())
+  organisationId String
+  value          String
+  stage          String
+  order          Int      @default(0)
+  colour         String   @default("#4a90e2")
+  hidden         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  alerts         Alert[]
+  @@unique([organisationId, value])
+}
+
+model Alert {
+  id             String   @id @default(uuid())
+  organisationId String
+  type           String
+  source         String
+  sourceRef      String
+  externalLink   String?
+  title          String
+  description    String   @default("")
+  summary        String?
+  severity       Int      @default(2)
+  tlp            Int      @default(2)
+  pap            Int      @default(2)
+  tags           String[] @default([])
+  statusId       String?
+  stage          String   @default("New")
+  assigneeId     String?
+  date           DateTime @default(now())
+  flag           Boolean  @default(false)
+  follow         Boolean  @default(true)
+  read           Boolean  @default(false)
+  caseId         String?
+  customFields   Json     @default("{}")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  acknowledgedAt DateTime?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  status       AlertStatus? @relation(fields: [statusId], references: [id])
+  assignee     User?        @relation("AlertAssignee", fields: [assigneeId], references: [id])
+  createdBy    User?        @relation(fields: [createdById], references: [id])
+  case         Case?        @relation(fields: [caseId], references: [id])
+  observables  Observable[]
+  procedures   Procedure[]
+  @@unique([organisationId, type, source, sourceRef])
+  @@index([organisationId, stage])
+}
+
+model Tag {
+  id             String  @id @default(uuid())
+  organisationId String
+  name           String
+  colour         String  @default("#000000")
+  createdAt      DateTime @default(now())
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  @@unique([organisationId, name])
+}
+
+model CustomField {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  reference      String
+  type           String   @default("string")
+  options        Json     @default("[]")
+  mandatory      Boolean  @default(false)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  @@unique([organisationId, reference])
+}
+
+model CaseTemplate {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  displayName    String?
+  titlePrefix    String?
+  description    String   @default("")
+  severity       Int      @default(2)
+  tlp            Int      @default(2)
+  pap            Int      @default(2)
+  tags           String[] @default([])
+  customFields   Json     @default("{}")
+  taskRule       String   @default("manual")
+  observableRule String   @default("manual")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy      User?        @relation(fields: [createdById], references: [id])
+  tasks          CaseTemplateTask[]
+  @@unique([organisationId, name])
+}
+
+model CaseTemplateTask {
+  id          String  @id @default(uuid())
+  templateId  String
+  title       String
+  group       String?
+  description String  @default("")
+  order       Int     @default(0)
+  dueDays     Int?
+  mandatory   Boolean @default(false)
+  template    CaseTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+}
+
+model Dashboard {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  description    String?
+  visibility     String   @default("shared")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy      User?        @relation(fields: [createdById], references: [id])
+  widgets        DashboardWidget[]
+}
+
+model DashboardWidget {
+  id          String  @id @default(uuid())
+  dashboardId String
+  type        String
+  title       String
+  config      Json    @default("{}")
+  position    Int     @default(0)
+  size        String  @default("medium")
+  dashboard   Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+}
+
+model Page {
+  id             String   @id @default(uuid())
+  organisationId String
+  caseId         String?
+  title          String
+  content        String   @default("")
+  category       String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  case           Case?        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdBy      User?        @relation(fields: [createdById], references: [id])
+  @@index([caseId])
+}
+
+model PageTemplate {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  content        String   @default("")
+  category       String?
+  createdAt      DateTime @default(now())
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+}
+
+model CaseReport {
+  id             String   @id @default(uuid())
+  organisationId String
+  caseId         String
+  templateId     String?
+  content        String   @default("")
+  renderedAt     DateTime?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  case           Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdBy      User?        @relation(fields: [createdById], references: [id])
+}
+
+model CaseReportTemplate {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  content        String   @default("")
+  widgets        Json     @default("[]")
+  createdAt      DateTime @default(now())
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+}
+
+model Attachment {
+  id             String   @id @default(uuid())
+  organisationId String
+  objectType     String
+  objectId       String
+  filename       String
+  contentType    String
+  size           Int
+  storageKey     String
+  sha256         String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id])
+  observables  Observable[]
+  @@index([objectType, objectId])
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  organisationId String?
+  actorId        String?
+  action         String
+  objectType     String
+  objectId       String?
+  details        Json     @default("{}")
+  ip             String?
+  createdAt      DateTime @default(now())
+  organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+  actor          User?         @relation(fields: [actorId], references: [id])
+  @@index([organisationId, createdAt])
+}
+
+model Function {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  description    String?
+  code           String   @default("")
+  enabled        Boolean  @default(true)
+  kind           String   @default("api")
+  mode           String   @default("Enabled")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy      User?        @relation(fields: [createdById], references: [id])
+  @@unique([organisationId, name])
+}
+
+model SlaRule {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  enabled        Boolean  @default(true)
+  order          Int      @default(0)
+  config         Json     @default("{}")
+  createdAt      DateTime @default(now())
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  @@index([organisationId, enabled])
+}
+
+model SlaEvent {
+  id             String   @id @default(uuid())
+  organisationId String
+  ruleId         String
+  objectType     String
+  objectId       String
+  objective      String
+  kind           String
+  createdAt      DateTime @default(now())
+
+  @@unique([ruleId, objectId, objective, kind])
+  @@index([organisationId, createdAt])
+  @@index([objectType, objectId])
+}
+
+model Notification {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  enabled        Boolean  @default(true)
+  config         Json     @default("{}")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy      User?        @relation(fields: [createdById], references: [id])
+}
+
+model Endpoint {
+  id             String   @id @default(uuid())
+  organisationId String?
+  name           String
+  type           String
+  config         Json     @default("{}")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy      User?        @relation(fields: [createdById], references: [id])
+}
+
+model AlertFeeder {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  enabled        Boolean  @default(true)
+  config         Json     @default("{}")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy      User?        @relation(fields: [createdById], references: [id])
+}
+
+model Job {
+  id             String   @id @default(uuid())
+  organisationId String?
+  type           String
+  status         String   @default("pending")
+  payload        Json     @default("{}")
+  result         Json     @default("{}")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  @@index([organisationId, status])
+}

@@ -1,0 +1,23 @@
+{
+  "name": "myhive",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-or-later",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @myhive/api\" \"npm run dev -w @myhive/web\"",
+    "build": "npm run build -w @myhive/api && npm run build -w @myhive/web",
+    "db:generate": "npm run db:generate -w @myhive/api",
+    "db:push": "npm run db:push -w @myhive/api",
+    "db:seed": "npm run db:seed -w @myhive/api",
+    "lint": "npm run lint -w @myhive/api && npm run lint -w @myhive/web",
+    "db:sync": "npm run db:sync -w @myhive/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}

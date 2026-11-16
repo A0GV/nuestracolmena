@@ -1,0 +1,41 @@
+# Grafana de Nuestracolmena en el servidor de casa (servidor de casa).
+# Lee el Postgres de Nuestracolmena (publicado en 192.0.2.10:5433) con un rol de solo lectura
+# y la web (myhive-web) la sirve en /grafana/. Instalar con: bash deploy/grafana/setup.sh
+name: myhive-grafana
+
+services:
+  grafana:
+    image: grafana/grafana-oss:12.4.3
+    container_name: myhive-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_BIND:-0.0.0.0}:${GRAFANA_PORT:-3030}:3000"
+    environment:
+      GF_SERVER_ROOT_URL: ${PUBLIC_URL:-https://nuestracolmena.example.com}/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?define GRAFANA_ADMIN_PASSWORD en .env}
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_DEFAULT_LANGUAGE: es-ES
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/nuestracolmena-resumen.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      MYHIVE_GRAFANA_DB_HOST: ${MYHIVE_GRAFANA_DB_HOST:-192.0.2.10:5433}
+      MYHIVE_GRAFANA_DB_NAME: ${MYHIVE_GRAFANA_DB_NAME:-myhive}
+      MYHIVE_GRAFANA_DB_USER: ${MYHIVE_GRAFANA_DB_USER:-nuestracolmena_grafana}
+      MYHIVE_GRAFANA_DB_PASSWORD: ${MYHIVE_GRAFANA_DB_PASSWORD:?define MYHIVE_GRAFANA_DB_PASSWORD en .env}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  grafana-data:

@@ -1,0 +1,30 @@
+node_modules
+dist
+build
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+coverage
+apps/web/dist
+apps/api/dist
+apps/api/prisma/*.db
+
+apps/api/uploads
+
+# Integrations (Cortex/MISP) runtime data and secrets
+deploy/integrations/.env
+deploy/integrations/connectors.env
+deploy/cybersoc-vm/connectors.env
+deploy/integrations/cortex/config/secret.conf
+deploy/integrations/cortex/config/index.conf
+deploy/integrations/cortex/cortex-jobs/
+deploy/integrations/cortex/logs/
+deploy/integrations/misp/
+deploy/integrations/cortex/.myhive-key
+deploy/integrations/setup.log
+deploy/cybersoc-vm/certs/
+
+# Grafana (secretos)
+deploy/grafana/.env

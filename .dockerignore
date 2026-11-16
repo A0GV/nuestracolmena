@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/.env
+.env
+.env.*
+!.env.example
+apps/api/uploads
+uploads
+deploy/integrations/.env
+deploy/integrations/cortex/.myhive-key
+# El resto del stack local de Cortex/MISP no se necesita dentro de la imagen.
+deploy/integrations
+recon
+.git
+connectors.env

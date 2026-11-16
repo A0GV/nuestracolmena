@@ -1,0 +1,183 @@
+# Cortex + MISP for MyHive.
+#   cd deploy/integrations && ./setup.sh   (first time: renders configs, starts stack, bootstraps Cortex)
+#   docker compose up -d                   (next times)
+#
+# Cortex reuses the Elasticsearch of the TheHive stack (network prod1-thehive_thehive-network).
+name: myhive-integrations
+
+services:
+  cortex:
+    image: thehiveproject/cortex:4.2.0
+    container_name: myhive-cortex
+    hostname: cortex
+    restart: unless-stopped
+    environment:
+      - |
+        JAVA_OPTS=
+          -Xms512M
+          -Xmx1000M
+          -XX:MaxMetaspaceSize=300m
+          -XX:ReservedCodeCacheSize=200m
+      - es_uri=http://elasticsearch:9200
+      - job_directory=/tmp/cortex-jobs
+      - docker_job_directory=${CORTEX_JOB_DIR}
+      # The Cortex entrypoint runs `chown cortex:cortex /var/run/docker.sock` on the HOST socket.
+      # Mapping the cortex user to the host user/docker group keeps the socket usable by `docker` group members.
+      - daemon_user=${CORTEX_DAEMON_USER}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${CORTEX_JOB_DIR}:/tmp/cortex-jobs
+      - ./cortex/config:/etc/cortex:ro
+      - ./cortex/logs:/var/log/cortex
+      - ./cortex/neurons:/opt/cortexneurons
+    ports:
+      - "0.0.0.0:9001:9001"
+    mem_limit: 1600m
+    networks:
+      - thehive
+      - default
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f http://localhost:9001/api/status || exit 1"]
+      start_period: 120s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  misp-redis:
+    image: valkey/valkey:7.2
+    container_name: myhive-misp-redis
+    restart: unless-stopped
+    command: ["valkey-server", "--requirepass", "${REDIS_PASSWORD}", "--maxmemory", "128mb"]
+    mem_limit: 192m
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - misp_cache:/data
+
+  misp-db:
+    image: mariadb:10.11
+    container_name: myhive-misp-db
+    restart: unless-stopped
+    environment:
+      - MYSQL_USER=misp
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=misp
+    command: >
+      --innodb-buffer-pool-size=256M
+      --innodb-log-file-size=128M
+      --innodb-change-buffering=none
+      --innodb-stats-persistent=ON
+    mem_limit: 640m
+    cap_add:
+      - SYS_NICE
+    volumes:
+      - misp_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin --user=misp --password=\"$$MYSQL_PASSWORD\" status"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
+  misp-modules:
+    image: ghcr.io/misp/misp-docker/misp-modules:latest
+    container_name: myhive-misp-modules
+    restart: unless-stopped
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6666'"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
+
+  misp-core:
+    image: ghcr.io/misp/misp-docker/misp-core:latest
+    container_name: myhive-misp-core
+    restart: unless-stopped
+    depends_on:
+      misp-redis:
+        condition: service_healthy
+      misp-db:
+        condition: service_healthy
+      misp-modules:
+        condition: service_healthy
+    mem_limit: 1200m
+    cap_add:
+      - AUDIT_WRITE
+    environment:
+      - BASE_URL=${MISP_BASE_URL}
+      - ADMIN_EMAIL=${MISP_ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${MISP_ADMIN_PASSWORD}
+      - ADMIN_KEY=${MISP_ADMIN_KEY}
+      - ADMIN_ORG=${MISP_ADMIN_ORG}
+      - ENCRYPTION_KEY=${MISP_ENCRYPTION_KEY}
+      - DISABLE_IPV6=true
+      - DISABLE_PRINTING_PLAINTEXT_CREDENTIALS=true
+      - MYSQL_HOST=misp-db
+      - MYSQL_PORT=3306
+      - MYSQL_USER=misp
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=misp
+      - REDIS_HOST=misp-redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - MISP_MODULES_FQDN=http://misp-modules
+      - NUM_WORKERS_DEFAULT=1
+      - NUM_WORKERS_PRIO=1
+      - NUM_WORKERS_EMAIL=1
+      - NUM_WORKERS_UPDATE=1
+      - NUM_WORKERS_CACHE=1
+      - PHP_MEMORY_LIMIT=512M
+      - TZ=America/Mexico_City
+    volumes:
+      - ./misp/configs:/var/www/MISP/app/Config
+      - ./misp/logs:/var/www/MISP/app/tmp/logs
+      - ./misp/files:/var/www/MISP/app/files
+      - ./misp/gnupg:/var/www/MISP/.gnupg
+    expose:
+      - 9002
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/9002'"]
+      interval: 10s
+      timeout: 2s
+      retries: 30
+      start_period: 120s
+
+  misp-nginx:
+    image: ghcr.io/misp/misp-docker/misp-nginx:latest
+    container_name: myhive-misp-nginx
+    restart: unless-stopped
+    depends_on:
+      misp-core:
+        condition: service_healthy
+    ports:
+      - "0.0.0.0:8090:8080"
+      - "0.0.0.0:8445:8443"
+    volumes:
+      - ./misp/ssl:/etc/nginx/certs:ro
+    tmpfs:
+      - /etc/nginx/conf.d:mode=0755,uid=101,gid=101
+      - /var/cache/nginx:mode=0755,uid=101,gid=101
+      - /tmp:mode=1777
+    user: nginx
+    read_only: true
+    environment:
+      - BASE_URL=${MISP_BASE_URL}
+      - DISABLE_IPV6=true
+    mem_limit: 128m
+
+networks:
+  thehive:
+    external: true
+    name: prod1-thehive_thehive-network
+
+volumes:
+  misp_mysql:
+  misp_cache:

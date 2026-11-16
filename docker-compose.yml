@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: myhive-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: myhive
+      POSTGRES_PASSWORD: myhive
+      POSTGRES_DB: myhive
+    ports:
+      - "5433:5432"
+    volumes:
+      - myhive_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myhive -d myhive"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    container_name: myhive-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: myhive
+      MINIO_ROOT_PASSWORD: myhive-secret
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    volumes:
+      - myhive_minio:/data
+
+volumes:
+  myhive_pgdata:
+  myhive_minio:

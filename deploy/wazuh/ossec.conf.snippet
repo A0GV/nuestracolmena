@@ -1,0 +1,8 @@
+<!-- Wazuh manager: añadir dentro de <ossec_config> en /var/ossec/etc/ossec.conf -->
+<integration>
+  <name>custom-myhive</name>
+  <hook_url>http://192.0.2.4:4100/api/v1/function/wazuh-alert</hook_url>
+  <api_key>mh_REEMPLAZA_CON_TU_API_KEY</api_key>
+  <level>7</level>
+  <alert_format>json</alert_format>
+</integration>

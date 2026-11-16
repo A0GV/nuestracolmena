@@ -1,0 +1,30 @@
+# API de MyHive en el servidor de casa, en Docker para que arranque sola tras reiniciar.
+# No construye imagen: ejecuta el código ya compilado del repo (apps/api/dist) y su node_modules.
+#
+#   Levantar / recrear:          docker compose -f deploy/local-api.compose.yml up -d
+#   Tras cambiar el backend:     npm run build -w @myhive/api && docker restart myhive-api
+#   Si cambió el esquema:        npm run db:sync -w @myhive/api   (antes del restart)
+#   Logs:                        docker logs -f myhive-api
+#
+# Para la VM del CyberSOC se usa deploy/cybersoc-vm/ (imagen propia), no este archivo.
+name: myhive-local
+
+services:
+  api:
+    # Node 22 + OpenSSL (Prisma lo necesita), igual que la imagen de deploy/cybersoc-vm.
+    image: myhive-local-node:22
+    build:
+      dockerfile_inline: |
+        FROM node:22-bookworm-slim
+        RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+         && rm -rf /var/lib/apt/lists/*
+    container_name: myhive-api
+    restart: unless-stopped
+    # Red del host: Postgres en localhost:5433, Cortex/MISP en localhost, y escucha en :4100 como antes.
+    network_mode: host
+    user: "1000:1000"
+    working_dir: /opt/myhive/apps/api
+    # La API lee apps/api/.env sola (ConfigModule); uploads queda en apps/api/uploads.
+    command: ["node", "dist/main.js"]
+    volumes:
+      - ..:/opt/myhive

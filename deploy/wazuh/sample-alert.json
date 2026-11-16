@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-11-03T10:15:32.123+0000",
+  "rule": {
+    "level": 12,
+    "description": "Suricata: Possible port scan detected (Nmap)",
+    "id": "100199",
+    "firedtimes": 4,
+    "mail": true,
+    "groups": ["suricata", "ids", "attack"],
+    "mitre": {
+      "id": ["T1046"],
+      "tactic": ["Discovery"],
+      "technique": ["Network Service Discovery"]
+    }
+  },
+  "agent": {
+    "id": "001",
+    "name": "suricata-sensor",
+    "ip": "192.0.2.50"
+  },
+  "manager": {
+    "name": "wazuh-manager"
+  },
+  "id": "1762164932.123456",
+  "full_log": "{\"timestamp\":\"2026-11-03T10:15:32.123456+0000\",\"event_type\":\"alert\",\"src_ip\":\"185.220.101.7\",\"dest_ip\":\"192.0.2.20\",\"proto\":\"TCP\",\"alert\":{\"action\":\"allowed\",\"signature_id\":1000099,\"signature\":\"Possible port scan detected\",\"category\":\"Attempted Information Leak\",\"severity\":1}}",
+  "decoder": {
+    "name": "json"
+  },
+  "location": "/var/log/suricata/eve.json",
+  "data": {
+    "src_ip": "185.220.101.7",
+    "dest_ip": "192.0.2.20",
+    "src_port": 49152,
+    "dest_port": 445,
+    "proto": "TCP",
+    "alert": {
+      "signature_id": "1000099",
+      "signature": "Possible port scan detected",
+      "category": "Attempted Information Leak",
+      "severity": 1
+    }
+  }
+}

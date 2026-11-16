@@ -1,0 +1,4 @@
+# Scripts que se ejecutan en Linux (Wazuh, VM): siempre con saltos LF.
+*.sh text eol=lf
+deploy/wazuh/custom-myhive text eol=lf
+deploy/wazuh/custom-myhive.py text eol=lf
